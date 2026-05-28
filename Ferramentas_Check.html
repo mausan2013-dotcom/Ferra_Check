@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ferramentas Check Diário</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f4f8; color: #333; }
+        .container { max-width: 480px; margin: 0 auto; padding: 16px; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
+        h1, h2, h3 { color: #1a237e; }
+        button { background: #1565c0; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer; transition: background 0.3s; }
+        button:active { background: #0d47a1; }
+        button.secondary { background: #78909c; }
+        button.danger { background: #c62828; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #b0bec5; border-radius: 8px; font-size: 16px; margin-bottom: 12px; }
+        input:focus { border-color: #1565c0; outline: none; }
+        .tab-bar { display: flex; background: #e3f2fd; border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+        .tab-btn { flex: 1; padding: 12px; text-align: center; font-weight: bold; cursor: pointer; transition: background 0.3s; }
+        .tab-btn.active { background: #1565c0; color: white; }
+        .hide { display: none; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 100; }
+        .modal-content { background: white; border-radius: 12px; padding: 24px; width: 90%; max-width: 400px; }
+        .modal-close { float: right; font-size: 24px; cursor: pointer; }
+        .ferramenta-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #e0e0e0; }
+        .ferramenta-item:last-child { border-bottom: none; }
+        .acoes button { margin-left: 8px; padding: 6px 12px; font-size: 14px; }
+        .status-ok { color: #2e7d32; }
+        .status-falta { color: #f9a825; }
+        .status-excesso { color: #c62828; }
+        .row { display: flex; gap: 8px; align-items: center; }
+        .resumo { background: #e8eaf6; border-radius: 8px; padding: 12px; margin-top: 16px; }
+        .historico-item { padding: 8px 0; border-bottom: 1px solid #eee; }
+        .flex { display: flex; gap: 8px; flex-wrap: wrap; }
+        .mb { margin-bottom: 16px; }
+        .mt { margin-top: 16px; }
+        .text-center { text-align: center; }
+        @media (max-width: 400px) {
+            .container { padding: 8px; }
+            button { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+<div class="container" id="app">
+    <!-- Tela de Login -->
+    <div id="loginScreen" class="card">
+        <h2 class="text-center">Acesso</h2>
+        <input type="text" id="loginUser" placeholder="Usuário" value="admin">
+        <input type="password" id="loginPass" placeholder="Senha" value="1234">
+        <button onclick="login()" style="width:100%;">Entrar</button>
+        <p id="loginError" style="color:red; margin-top:8px; display:none;">Usuário ou senha incorretos</p>
+    </div>
+
+    <!-- Painel Principal (após login) -->
+    <div id="mainPanel" class="hide">
+        <!-- Barra de Logout -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <h2 style="margin:0;">Ferramentas</h2>
+            <button onclick="logout()" class="secondary" style="padding:8px 16px;">Sair</button>
+        </div>
+
+        <!-- Abas -->
+        <div class="tab-bar">
+            <div class="tab-btn active" onclick="switchTab('gestao')" id="tabGestao">Gestão</div>
+            <div class="tab-btn" onclick="switchTab('check')" id="tabCheck">Check Diário</div>
+        </div>
+
+        <!-- ABA GESTÃO DE FERRAMENTAS -->
+        <div id="gestaoContent">
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3>Ferramentas Cadastradas</h3>
+                    <button onclick="abrirModalFerramenta()">+ Adicionar</button>
+                </div>
+                <div id="listaFerramentas"></div>
+            </div>
+            <!-- Autenticação para gestão -->
+            <div class="card">
+                <h3>Proteção da Gestão</h3>
+                <input type="password" id="gestaoPass" placeholder="Senha de gestão (padrão: 0000)">
+                <button onclick="verificarSenhaGestao()">Desbloquear</button>
+                <p id="gestaoError" style="color:red; margin-top:8px; display:none;">Senha incorreta</p>
+            </div>
+        </div>
+
+        <!-- ABA CHECK DIÁRIO -->
+        <div id="checkContent" class="hide">
+            <div class="card">
+                <h3>Check Diário</h3>
+                <input type="text" id="mecanico" placeholder="Nome do Mecânico">
+                <div class="row">
+                    <span>Data: <span id="dataAtual"></span></span>
+                    <span>Hora: <span id="horaAtual"></span></span>
+                </div>
+                <div id="checkList"></div>
+                <button onclick="enviarCheck()" style="width:100%;margin-top:12px;">Enviar Check</button>
+                <div id="resumoCheck" class="resumo hide"></div>
+            </div>
+            <div class="card">
+                <h3>Histórico de Checks</h3>
+                <select id="filtroHistorico" onchange="carregarHistorico()">
+                    <option value="todos">Todos</option>
+                    <option value="ok">OK</option>
+                    <option value="falta">Falta</option>
+                    <option value="excesso">Excesso</option>
+                </select>
+                <div id="historicoList"></div>
+            </div>
+            <div class="card">
+                <h3>Integração Google Sheets</h3>
+                <input type="text" id="webhookUrl" placeholder="URL do Webhook (opcional)">
+                <button onclick="salvarWebhook()">Salvar</button>
+                <p id="webhookStatus" style="margin-top:8px;"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Ferramenta (Adicionar/Editar) -->
+<div id="modalFerramenta" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="fecharModal()">&times;</span>
+        <h3 id="modalTitulo">Adicionar Ferramenta</h3>
+        <input type="text" id="ferrNome" placeholder="Nome da Ferramenta">
+        <input type="number" id="ferrQtd" placeholder="Quantidade Padrão" min="1">
+        <button onclick="salvarFerramenta()" id="modalBtnSalvar" style="width:100%;">Salvar</button>
+        <p id="ferrError" style="color:red; margin-top:8px; display:none;">Preencha os campos corretamente.</p>
+    </div>
+</div>
+
+<script>
+    // ===== Dados =====
+    const STORAGE_FERRAMENTAS = 'ferramentas';
+    const STORAGE_HISTORICO = 'historico';
+    const STORAGE_WEBHOOK = 'webhookUrl';
+
+    let ferramentas = [];
+    let historico = [];
+    let editandoIndex = -1;
+
+    // ===== Inicialização =====
+    document.addEventListener('DOMContentLoaded', function() {
+        carregarFerramentas();
+        carregarHistorico();
+        atualizarDataHora();
+        setInterval(atualizarDataHora, 1000);
+        carregarWebhook();
+    });
+
+    // ===== Autenticação =====
+    function login() {
+        const user = document.getElementById('loginUser').value.trim();
+        const pass = document.getElementById('loginPass').value.trim();
+        if (user === 'admin' && pass === '1234') {
+            document.getElementById('loginScreen').classList.add('hide');
+            document.getElementById('mainPanel').classList.remove('hide');
+            document.getElementById('loginError').style.display = 'none';
+            renderizarLista();
+            carregarCheck();
+        } else {
+            document.getElementById('loginError').style.display = 'block';
+        }
+    }
+
+    function logout() {
+        document.getElementById('loginScreen').classList.remove('hide');
+        document.getElementById('mainPanel').classList.add('hide');
+        document.getElementById('loginUser').value = 'admin';
+        document.getElementById('loginPass').value = '1234';
+        document.getElementById('loginError').style.display = 'none';
+    }
+
+    // ===== Abas =====
+    function switchTab(tab) {
+        document.getElementById('tabGestao').classList.toggle('active', tab === 'gestao');
+        document.getElementById('tabCheck').classList.toggle('active', tab === 'check');
+        document.getElementById('gestaoContent').classList.toggle('hide', tab !== 'gestao');
+        document.getElementById('checkContent').classList.toggle('hide', tab !== 'check');
+        if (tab === 'check') {
+            carregarCheck();
+            carregarHistorico();
+        }
+    }
+
+    // ===== Ferramentas (CRUD) =====
+    function carregarFerramentas() {
+        const stored = localStorage.getItem(STORAGE_FERRAMENTAS);
+        ferramentas = stored ? JSON.parse(stored) : [];
+        renderizarLista();
+    }
+
+    function salvarFerramentasStorage() {
+        localStorage.setItem(STORAGE_FERRAMENTAS, JSON.stringify(ferramentas));
+    }
+
+    function renderizarLista() {
+        const lista = document.getElementById('listaFerramentas');
+        if (ferramentas.length === 0) {
+            lista.innerHTML = '<p style="text-align:center;color:#999;">Nenhuma ferramenta cadastrada.</p>';
+            return;
+        }
+        let html = '';
+        ferramentas.forEach((f, i) => {
+            html += `<div class="ferramenta-item">
+                <div><strong>${f.nome}</strong> <br> Quantidade padrão: ${f.quantidade}</div>
+                <div class="acoes">
+                    <button onclick="editarFerramenta(${i})" class="secondary">Editar</button>
+                    <button onclick="deletarFerramenta(${i})" class="danger">Deletar</button>
+                </div>
+            </div>`;
+        });
+        lista.innerHTML = html;
+    }
+
+    function abrirModalFerramenta(index = -1) {
+        editandoIndex = index;
+        document.getElementById('modalTitulo').textContent = index === -1 ? 'Adicionar Ferramenta' : 'Editar Ferramenta';
+        document.getElementById('ferrNome').value = index === -1 ? '' : ferramentas[index].nome;
+        document.getElementById('ferrQtd').value = index === -1 ? '' : ferramentas[index].quantidade;
+        document.getElementById('ferrError').style.display = 'none';
+        document.getElementById('modalFerramenta').style.display = 'flex';
+    }
+
+    function fecharModal() {
+        document.getElementById('modalFerramenta').style.display = 'none';
+    }
+
+    function salvarFerramenta() {
+        const nome = document.getElementById('ferrNome').value.trim();
+        const qtd = parseInt(document.getElementById('ferrQtd').value);
+        if (!nome || isNaN(qtd) || qtd <= 0) {
+            document.getElementById('ferrError').style.display = 'block';
+            return;
+        }
+        document.getElementById('ferrError').style.display = 'none';
+        if (editandoIndex === -1) {
+            ferramentas.push({ nome, quantidade: qtd });
+        } else {
+            ferramentas[editandoIndex] = { nome, quantidade: qtd };
+        }
+        salvarFerramentasStorage();
+        renderizarLista();
+        fecharModal();
+        carregarCheck(); // atualiza check se estiver visível
+    }
+
+    function editarFerramenta(index) {
+        if (!desbloqueado) { alert('Desbloqueie a gestão primeiro.'); return; }
+        abrirModalFerramenta(index);
+    }
+
+    function deletarFerramenta(index) {
+        if (!desbloqueado) { alert('Desbloqueie a gestão primeiro.'); return; }
+        if (confirm('Tem certeza que deseja deletar esta ferramenta?')) {
+            ferramentas.splice(index, 1);
+            salvarFerramentasStorage();
+            renderizarLista();
+            carregarCheck();
+        }
+    }
+
+    // ===== Proteção Gestão =====
+    let desbloqueado = false;
+    function verificarSenhaGestao() {
+        const senha = document.getElementById('gestaoPass').value.trim();
+        if (senha === '0000') {
+            desbloqueado = true;
+            document.getElementById('gestaoError').style.display = 'none';
+            alert('Gestão desbloqueada!');
+        } else {
+            document.getElementById('gestaoError').style.display = 'block';
+        }
+    }
+
+    // ===== Check Diário =====
+    function atualizarDataHora() {
+        const agora = new Date();
+        document.getElementById('dataAtual').textContent = agora.toLocaleDateString('pt-BR');
+        document.getElementById('horaAtual').textContent = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function carregarCheck() {
+        const container = document.getElementById('checkList');
+        if (ferramentas.length === 0) {
+            container.innerHTML = '<p>Cadastre ferramentas na aba Gestão.</p>';
+            return;
+        }
+        let html = '';
+        ferramentas.forEach((f, i) => {
+            html += `<div class="ferramenta-item">
+                <div><strong>${f.nome}</strong> (Padrão: ${f.quantidade})</div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <input type="number" id="qtdReal_${i}" min="0" style="width:80px;" placeholder="Real">
+                </div>
+            </div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function enviarCheck() {
+        const mecanico = document.getElementById('mecanico').value.trim();
+        if (!mecanico) { alert('Informe o nome do mecânico.'); return; }
+        const data = document.getElementById('dataAtual').textContent;
+        const hora = document.getElementById('horaAtual').textContent;
+        let conformes = 0;
+        let total = ferramentas.length;
+        let resultado = [];
+        let ok = true;
+        ferramentas.forEach((f, i) => {
+            const qtdReal = parseInt(document.getElementById(`qtdReal_${i}`).value);
+            if (isNaN(qtdReal) || qtdReal < 0) { ok = false; return; }
+            let status;
+            if (qtdReal >= f.quantidade) status = 'ok';
+            else if (qtdReal < f.quantidade) status = 'falta';
+            else status = 'excesso';
+            if (status === 'ok') conformes++;
+            resultado.push({ data, hora, mecanico, ferramenta: f.nome, qtdPadrao: f.quantidade, qtdReal, status });
+        });
+        if (!ok) { alert('Preencha todas as quantidades reais com números válidos.'); return; }
+
+        // Exibir resumo
+        const percent = ((conformes / total) * 100).toFixed(1);
+        document.getElementById('resumoCheck').classList.remove('hide');
+        document.getElementById('resumoCheck').innerHTML = `<strong>Resumo:</strong> ${conformes} de ${total} conformes (${percent}%)`;
+
+        // Salvar no histórico
+        historico.push(...resultado);
+        localStorage.setItem(STORAGE_HISTORICO, JSON.stringify(historico));
+        carregarHistorico();
+
+        // Enviar para webhook
+        const webhookUrl = localStorage.getItem(STORAGE_WEBHOOK);
+        if (webhookUrl) {
+            fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ checks: resultado })
+            }).then(r => console.log('Webhook enviado', r)).catch(e => console.error('Erro webhook', e));
+        }
+
+        // Limpar campos
+        ferramentas.forEach((_, i) => document.getElementById(`qtdReal_${i}`).value = '');
+        document.getElementById('mecanico').value = '';
+    }
+
+    // ===== Histórico =====
+    function carregarHistorico() {
+        const stored = localStorage.getItem(STORAGE_HISTORICO);
+        historico = stored ? JSON.parse(stored) : [];
+        const filtro = document.getElementById('filtroHistorico').value;
+        const lista = document.getElementById('historicoList');
+        let filtrados = historico;
+        if (filtro !== 'todos') {
+            filtrados = historico.filter(item => item.status === filtro);
+        }
+        if (filtrados.length === 0) {
+            lista.innerHTML = '<p style="color:#999;">Nenhum registro.</p>';
+            return;
+        }
+        let html = '';
+        filtrados.slice(-20).reverse().forEach(item => {
+            const statusClass = item.status === 'ok' ? 'status-ok' : (item.status === 'falta' ? 'status-falta' : 'status-excesso');
+            const statusIcon = item.status === 'ok' ? '✅' : (item.status === 'falta' ? '⚠️' : '🔴');
+            html += `<div class="historico-item">
+                <strong>${statusIcon}</strong> ${item.data} ${item.hora} - ${item.mecanico}<br>
+                ${item.ferramenta}: padrão ${item.qtdPadrao}, real ${item.qtdReal}
+                <span class="${statusClass}">(${item.status.toUpperCase()})</span>
+            </div>`;
+        });
+        lista.innerHTML = html;
+    }
+
+    // ===== Webhook =====
+    function carregarWebhook() {
+        const url = localStorage.getItem(STORAGE_WEBHOOK);
+        if (url) document.getElementById('webhookUrl').value = url;
+    }
+
+    function salvarWebhook() {
+        const url = document.getElementById('webhookUrl').value.trim();
+        if (url) {
+            localStorage.setItem(STORAGE_WEBHOOK, url);
+            document.getElementById('webhookStatus').textContent = 'URL salva com sucesso!';
+        } else {
+            localStorage.removeItem(STORAGE_WEBHOOK);
+            document.getElementById('webhookStatus').textContent = 'URL removida.';
+        }
+    }
+</script>
+</body>
+</html>
